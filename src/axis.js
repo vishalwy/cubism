@@ -1,5 +1,6 @@
 cubism_contextPrototype.axis = function() {
   var context = this,
+      width = context.size(),
       scale = context.scale,
       axis_ = d3.svg.axis().scale(scale);
 
@@ -14,7 +15,7 @@ cubism_contextPrototype.axis = function() {
 
     var g = selection.append("svg")
         .datum({id: id})
-        .attr("width", context.size())
+        .attr("width", width)
         .attr("height", Math.max(28, -axis.tickSize()))
       .append("g")
         .attr("transform", "translate(0," + (axis_.orient() === "top" ? 27 : 4) + ")")
@@ -53,6 +54,13 @@ cubism_contextPrototype.axis = function() {
     }
   };
 
+  axis.width = function(_) {
+    if (!arguments.length) return width;
+    width = +_;
+    scale = context.scale.range([0, width]);
+    axis_ = axis_.scale(scale);
+  };
+  
   axis.focusFormat = function(_) {
     if (!arguments.length) return format == formatDefault ? null : _;
     format = _ == null ? formatDefault : _;
