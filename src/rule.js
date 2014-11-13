@@ -68,7 +68,7 @@ function cubism_ruleStyle(line) {
       .style("position", "absolute")
       .style("top", 0)
       .style("bottom", 0)
-      .style("width", "1px")
+      .style("width", cubism.pixelWidth + "px")
       .style("pointer-events", "none");
 }
 

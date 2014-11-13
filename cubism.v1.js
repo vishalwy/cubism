@@ -1,5 +1,5 @@
 (function(exports){
-var cubism = exports.cubism = {version: "1.6.0"};
+var cubism = exports.cubism = {version: "1.6.0", pixelWidth: 1};
 var cubism_id = 0;
 function cubism_identity(d) { return d; }
 cubism.option = function(name, defaultValue) {
@@ -30,7 +30,7 @@ cubism.context = function() {
       serverDelay = 5e3,
       clientDelay = 5e3,
       event = d3.dispatch("prepare", "beforechange", "change", "focus"),
-      scale = context.scale = d3.time.scale().range([0, size]),
+      scale = context.scale = d3.time.scale().range([0, size * 3]),
       timeout,
       focus;
 
@@ -1653,7 +1653,7 @@ function cubism_ruleStyle(line) {
       .style("position", "absolute")
       .style("top", 0)
       .style("bottom", 0)
-      .style("width", "1px")
+      .style("width", cubism.pixelWidth + "px")
       .style("pointer-events", "none");
 }
 
