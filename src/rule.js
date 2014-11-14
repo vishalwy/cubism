@@ -73,5 +73,5 @@ function cubism_ruleStyle(line) {
 }
 
 function cubism_ruleLeft(i) {
-  return i + "px";
+  return i - ((cubism.pixelWidth / 2) | 0) + "px";
 }

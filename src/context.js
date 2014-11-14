@@ -15,9 +15,9 @@ cubism.context = function() {
   function update() {
     var now = Date.now();
     stop0 = new Date(Math.floor((now - serverDelay - clientDelay + shift) / step) * step);
-    start0 = new Date(stop0 - size * step);
+    start0 = new Date(stop0 - (size / cubism.pixelWidth | 0) * step);
     stop1 = new Date(Math.floor((now - serverDelay + shift) / step) * step);
-    start1 = new Date(stop1 - size * step);
+    start1 = new Date(stop1 - (size / cubism.pixelWidth | 0) * step);
     scale.domain([start0, stop0]);
     return context;
   }
@@ -31,7 +31,7 @@ cubism.context = function() {
 
     timeout = setTimeout(function prepare() {
       stop1 = new Date(Math.floor((Date.now() - serverDelay + shift) / step) * step);
-      start1 = new Date(stop1 - size * step);
+      start1 = new Date(stop1 - (size / cubism.pixelWidth | 0) * step);
       event.prepare.call(context, start1, stop1);
 
       setTimeout(function() {

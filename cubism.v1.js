@@ -1,5 +1,5 @@
 (function(exports){
-var cubism = exports.cubism = {version: "1.6.0", pixelWidth: 1};
+var cubism = exports.cubism = {version: "1.6.0", pixelWidth: 5};
 var cubism_id = 0;
 function cubism_identity(d) { return d; }
 cubism.option = function(name, defaultValue) {
@@ -30,16 +30,16 @@ cubism.context = function() {
       serverDelay = 5e3,
       clientDelay = 5e3,
       event = d3.dispatch("prepare", "beforechange", "change", "focus"),
-      scale = context.scale = d3.time.scale().range([0, size * 3]),
+      scale = context.scale = d3.time.scale().range([0, size]),
       timeout,
       focus;
 
   function update() {
     var now = Date.now();
     stop0 = new Date(Math.floor((now - serverDelay - clientDelay + shift) / step) * step);
-    start0 = new Date(stop0 - size * step);
+    start0 = new Date(stop0 - (size * cubism.pixelWidth | 0) * step);
     stop1 = new Date(Math.floor((now - serverDelay + shift) / step) * step);
-    start1 = new Date(stop1 - size * step);
+    start1 = new Date(stop1 - (size * cubism.pixelWidth | 0) * step);
     scale.domain([start0, stop0]);
     return context;
   }
@@ -53,7 +53,7 @@ cubism.context = function() {
 
     timeout = setTimeout(function prepare() {
       stop1 = new Date(Math.floor((Date.now() - serverDelay + shift) / step) * step);
-      start1 = new Date(stop1 - size * step);
+      start1 = new Date(stop1 - (size * cubism.pixelWidth | 0) * step);
       event.prepare.call(context, start1, stop1);
 
       setTimeout(function() {
@@ -1658,6 +1658,6 @@ function cubism_ruleStyle(line) {
 }
 
 function cubism_ruleLeft(i) {
-  return i + "px";
+  return i - ((cubism.pixelWidth / 2) | 0) + "px";
 }
 })(this);
