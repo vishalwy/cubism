@@ -31,12 +31,21 @@ cubism_contextPrototype.axis = function() {
     context.on("focus.axis-" + id, function(i) {
       if (tick) {
         if (i == null) {
-          tick.style("display", "none");
-          g.selectAll("text").style("fill-opacity", null);
+            tick.style("display", "none");
+            g.selectAll("text").style("fill-opacity", null);
         } else {
-          tick.style("display", null).attr("x", i).text(format(scale.invert(i)));
-          var dx = tick.node().getComputedTextLength() + 6;
-          g.selectAll("text").style("fill-opacity", function(d) { return Math.abs(scale(d) - i) < dx ? 0 : 1; });
+            i = (i / cubism.pixelWidth | 0) * cubism.pixelWidth;
+            tick.style("display", null).text(format(scale.invert(i)));
+            var dx = tick.node().getComputedTextLength() + 6;
+            var dxt = (dx - 6) / 2;
+
+            if (i + dxt > width) 
+                i = width - dxt;
+            else if (i - dxt < 0)
+                i = dxt;
+
+            tick.attr('x', i);
+            g.selectAll("text").style("opacity", function(d) { return Math.abs(scale(d) - i) < dx ? 0 : 1; });
         }
       }
     });

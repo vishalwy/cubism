@@ -37,9 +37,9 @@ cubism.context = function() {
   function update() {
     var now = Date.now();
     stop0 = new Date(Math.floor((now - serverDelay - clientDelay + shift) / step) * step);
-    start0 = new Date(stop0 - (size * cubism.pixelWidth | 0) * step);
+    start0 = new Date(stop0 - (size / cubism.pixelWidth | 0) * step);
     stop1 = new Date(Math.floor((now - serverDelay + shift) / step) * step);
-    start1 = new Date(stop1 - (size * cubism.pixelWidth | 0) * step);
+    start1 = new Date(stop1 - (size / cubism.pixelWidth | 0) * step);
     scale.domain([start0, stop0]);
     return context;
   }
@@ -53,7 +53,7 @@ cubism.context = function() {
 
     timeout = setTimeout(function prepare() {
       stop1 = new Date(Math.floor((Date.now() - serverDelay + shift) / step) * step);
-      start1 = new Date(stop1 - (size * cubism.pixelWidth | 0) * step);
+      start1 = new Date(stop1 - (size / cubism.pixelWidth | 0) * step);
       event.prepare.call(context, start1, stop1);
 
       setTimeout(function() {
@@ -143,14 +143,17 @@ cubism.context = function() {
   };
 
   d3.select(window).on("keydown.context-" + ++cubism_id, function() {
+    if(d3.event.target.nodeName.toLowerCase() == 'input')
+        return;
+    
     switch (!d3.event.metaKey && d3.event.keyCode) {
       case 37: // left
         if (focus == null) focus = size - 1;
-        if (focus > 0) context.focus(--focus);
+        if (focus > 0) context.focus(focus -= cubism.pixelWidth);
         break;
       case 39: // right
         if (focus == null) focus = size - 2;
-        if (focus < size - 1) context.focus(++focus);
+        if (focus < size - 1) context.focus(focus += cubism.pixelWidth);
         break;
       default: return;
     }
@@ -1535,12 +1538,21 @@ cubism_contextPrototype.axis = function() {
     context.on("focus.axis-" + id, function(i) {
       if (tick) {
         if (i == null) {
-          tick.style("display", "none");
-          g.selectAll("text").style("fill-opacity", null);
+            tick.style("display", "none");
+            g.selectAll("text").style("fill-opacity", null);
         } else {
-          tick.style("display", null).attr("x", i).text(format(scale.invert(i)));
-          var dx = tick.node().getComputedTextLength() + 6;
-          g.selectAll("text").style("fill-opacity", function(d) { return Math.abs(scale(d) - i) < dx ? 0 : 1; });
+            i = (i / cubism.pixelWidth | 0) * cubism.pixelWidth;
+            tick.style("display", null).text(format(scale.invert(i)));
+            var dx = tick.node().getComputedTextLength() + 6;
+            var dxt = (dx - 6) / 2;
+
+            if (i + dxt > width) 
+                i = width - dxt;
+            else if (i - dxt < 0)
+                i = dxt;
+
+            tick.attr('x', i);
+            g.selectAll("text").style("opacity", function(d) { return Math.abs(scale(d) - i) < dx ? 0 : 1; });
         }
       }
     });
@@ -1658,6 +1670,6 @@ function cubism_ruleStyle(line) {
 }
 
 function cubism_ruleLeft(i) {
-  return i - ((cubism.pixelWidth / 2) | 0) + "px";
+  return (i / cubism.pixelWidth | 0) * cubism.pixelWidth + "px";
 }
 })(this);
