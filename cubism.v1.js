@@ -1149,11 +1149,11 @@ cubism_contextPrototype.horizon = function() {
           scale.range([m * height + y0, y0]);
           y0 = scale(0);
 
-          for (var i = i0, n = width, y1; i < n; ++i) {
+          for (var i = i0, n = width / cubism.pixelWidth | 0, y1; i < n; ++i) {
             y1 = metric_.valueAt(i);
             if (y1 <= 0) { negative = true; continue; }
             if (y1 === undefined) continue;
-            canvas.fillRect(i, y1 = scale(y1), 1, y0 - y1);
+            canvas.fillRect(i * cubism.pixelWidth, y1 = scale(y1), cubism.pixelWidth, y0 - y1);
           }
         }
 
@@ -1173,10 +1173,10 @@ cubism_contextPrototype.horizon = function() {
             scale.range([m * height + y0, y0]);
             y0 = scale(0);
 
-            for (var i = i0, n = width, y1; i < n; ++i) {
+            for (var i = i0, n = width / cubism.pixelWidth | 0, y1; i < n; ++i) {
               y1 = metric_.valueAt(i);
               if (y1 >= 0) continue;
-              canvas.fillRect(i, scale(-y1), 1, y0 - scale(-y1));
+              canvas.fillRect(i * cubism.pixelWidth, scale(-y1), cubism.pixelWidth, y0 - scale(-y1));
             }
           }
         }
@@ -1186,7 +1186,7 @@ cubism_contextPrototype.horizon = function() {
 
       function focus(i) {
         if (i == null) i = width - 1;
-        var value = metric_.valueAt(i);
+        var value = metric_.valueAt(i / cubism.pixelWidth | 0);
         span.datum(value).text(isNaN(value) ? null : format);
       }
 
