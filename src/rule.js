@@ -37,9 +37,9 @@ cubism_contextPrototype.rule = function() {
     });
 
     context.on("focus.rule-" + id, function(i) {
-      line.datum(i)
+      line
           .style("display", i == null ? "none" : null)
-          .style("left", i == null ? null : cubism_ruleLeft);
+          .style("left", i == null ? null : i + 'px');
     });
   }
 

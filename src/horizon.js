@@ -9,6 +9,7 @@ cubism_contextPrototype.horizon = function() {
       extent = null,
       title = cubism_identity,
       format = d3.format(".2s"),
+      changeFunc = null,
       colors = ["#08519c","#3182bd","#6baed6","#bdd7e7","#bae4b3","#74c476","#31a354","#006d2c"];
 
   function horizon(selection) {
@@ -33,7 +34,7 @@ cubism_contextPrototype.horizon = function() {
           id = ++cubism_id,
           metric_ = typeof metric === "function" ? metric.call(that, d, i) : metric,
           colors_ = typeof colors === "function" ? colors.call(that, d, i) : colors,
-          extent_ = typeof extent === "function" ? extent.call(that, d, i) : extent,
+          extent_ = extent,
           start = -Infinity,
           step = context.step(),
           canvas = d3.select(that).select("canvas"),
@@ -51,14 +52,16 @@ cubism_contextPrototype.horizon = function() {
         // compute the new extent and ready flag
         var extent = metric_.extent();
         ready = extent.every(isFinite);
-        if (extent_ != null) extent = extent_;
+        var tempExtent = null;
+        if (extent_ != null) tempExtent = typeof extent_ === "function" ? extent_.call(that, d, i) : extent_;
+        if (tempExtent != null) extent = tempExtent;
 
         // if this is an update (with no extent change), copy old values!
         var i0 = 0, max = Math.max(-extent[0], extent[1]);
         if (this === context) {
           if (max == max_) {
-            i0 = width - cubism_metricOverlap;
             var dx = (start1 - start) / step;
+            i0 = width - Math.max(dx, cubism_metricOverlap);
             if (dx < width) {
               var canvas0 = buffer.getContext("2d");
               canvas0.clearRect(0, 0, width, height);
@@ -141,6 +144,8 @@ cubism_contextPrototype.horizon = function() {
         change(start, stop), focus();
         if (ready) metric_.on("change.horizon-" + id, cubism_identity);
       });
+      
+      changeFunc = change;
     });
   }
 
@@ -162,6 +167,10 @@ cubism_contextPrototype.horizon = function() {
       context.on("change.horizon-" + d.id, null);
       context.on("focus.horizon-" + d.id, null);
     }
+  };
+  
+  horizon.redraw = function() {
+      changeFunc && changeFunc.call(null);
   };
 
   horizon.mode = function(_) {

@@ -10,6 +10,7 @@ cubism.context = function() {
       event = d3.dispatch("prepare", "beforechange", "change", "focus"),
       scale = context.scale = d3.time.scale().range([0, size]),
       timeout,
+      focusAnchor = null,
       focus;
 
   function update() {
@@ -76,6 +77,12 @@ cubism.context = function() {
     shift = +_;
     return update();
   };
+   
+  context.focusAnchor = function(_) {
+      if (!arguments.length) return focusAnchor;
+      focusAnchor = _;
+      return context;
+  };
 
   // The server delay is the amount of time we wait for the server to compute a
   // metric. This delay may result from clock skew or from delays collecting
@@ -97,6 +104,7 @@ cubism.context = function() {
 
   // Sets the focus to the specified index, and dispatches a "focus" event.
   context.focus = function(i) {
+    i = i === null ? focusAnchor : i;
     event.focus.call(context, focus = i);
     return context;
   };
