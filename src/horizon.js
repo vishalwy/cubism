@@ -9,11 +9,11 @@ cubism_contextPrototype.horizon = function() {
       extent = null,
       title = cubism_identity,
       format = d3.format(".2s"),
-      changeFunc = null,
+      changeFunc = null, sel = null,
       colors = ["#08519c","#3182bd","#6baed6","#bdd7e7","#bae4b3","#74c476","#31a354","#006d2c"];
-
+      
   function horizon(selection) {
-
+    sel = selection;
     selection
         .on("mousemove.horizon", function() { context.focus(Math.round(d3.mouse(this)[0])); })
         .on("mouseout.horizon", function() { context.focus(null); });
@@ -60,8 +60,8 @@ cubism_contextPrototype.horizon = function() {
         var i0 = 0, max = Math.max(-extent[0], extent[1]);
         if (this === context) {
           if (max == max_) {
-            var dx = (start1 - start) / step;
-            i0 = width - Math.max(dx, cubism_metricOverlap);
+            var dx = parseInt(((start1 - start) / step) * cubism.pixelWidth);
+            i0 = width - Math.max(dx, cubism_metricOverlap * cubism.pixelWidth);
             if (dx < width) {
               var canvas0 = buffer.getContext("2d");
               canvas0.clearRect(0, 0, width, height);
@@ -91,7 +91,7 @@ cubism_contextPrototype.horizon = function() {
           scale.range([m * height + y0, y0]);
           y0 = scale(0);
 
-          for (var i = i0, n = width / cubism.pixelWidth | 0, y1; i < n; ++i) {
+          for (var i = parseInt(i0 / cubism.pixelWidth), n = width / cubism.pixelWidth | 0, y1; i < n; ++i) {
             y1 = metric_.valueAt(i);
             if (y1 <= 0) { negative = true; continue; }
             if (y1 === undefined) continue;
@@ -115,9 +115,10 @@ cubism_contextPrototype.horizon = function() {
             scale.range([m * height + y0, y0]);
             y0 = scale(0);
 
-            for (var i = i0, n = width / cubism.pixelWidth | 0, y1; i < n; ++i) {
+            for (var i = parseInt(i0 / cubism.pixelWidth), n = width / cubism.pixelWidth | 0, y1; i < n; ++i) {
               y1 = metric_.valueAt(i);
               if (y1 >= 0) continue;
+              if (y1 === undefined) continue;
               canvas.fillRect(i * cubism.pixelWidth, scale(-y1), cubism.pixelWidth, y0 - scale(-y1));
             }
           }
@@ -219,6 +220,14 @@ cubism_contextPrototype.horizon = function() {
     if (!arguments.length) return colors;
     colors = _;
     return horizon;
+  };
+  
+  horizon.resize = function(_) {
+    if(!arguments.length) return width;
+    width = buffer.width = _;
+    sel.select("canvas").attr("width", width);
+    horizon.redraw();
+    return width;
   };
 
   return horizon;

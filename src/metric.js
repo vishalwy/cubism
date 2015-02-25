@@ -49,7 +49,7 @@ cubism_contextPrototype.metric = function(request, name) {
       start = -Infinity,
       stop,
       step = context.step(),
-      size = context.size(),
+      size = parseInt(context.size()/cubism.pixelWidth),
       values = [],
       event = d3.dispatch("change"),
       listening = 0,
