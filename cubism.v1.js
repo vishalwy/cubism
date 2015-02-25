@@ -1078,6 +1078,7 @@ cubism_contextPrototype.horizon = function() {
       extent = null,
       title = cubism_identity,
       format = d3.format(".2s"),
+      formatNaN = null,
       changeFunc = null, sel = null,
       colors = ["#08519c","#3182bd","#6baed6","#bdd7e7","#bae4b3","#74c476","#31a354","#006d2c"],
       patterns = {}; 
@@ -1212,7 +1213,7 @@ cubism_contextPrototype.horizon = function() {
       function focus(i) {
         if (i == null) i = width - 1;
         var value = metric_.valueAt(i / cubism.pixelWidth | 0);
-        span.datum(value).text(isNaN(value) ? null : format);
+        span.datum(value).text(isNaN(value) ? formatNaN : format);
       }
 
       // Update the chart when the context changes.
@@ -1295,6 +1296,12 @@ cubism_contextPrototype.horizon = function() {
   horizon.format = function(_) {
     if (!arguments.length) return format;
     format = _;
+    return horizon;
+  };
+  
+  horizon.formatNaN = function(_) {
+    if (!arguments.length) return formatNaN;
+    formatNaN = _;
     return horizon;
   };
 
