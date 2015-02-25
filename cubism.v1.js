@@ -1079,7 +1079,8 @@ cubism_contextPrototype.horizon = function() {
       title = cubism_identity,
       format = d3.format(".2s"),
       changeFunc = null, sel = null,
-      colors = ["#08519c","#3182bd","#6baed6","#bdd7e7","#bae4b3","#74c476","#31a354","#006d2c"];
+      colors = ["#08519c","#3182bd","#6baed6","#bdd7e7","#bae4b3","#74c476","#31a354","#006d2c"],
+      patterns = {}; 
       
   function horizon(selection) {
     sel = selection;
@@ -1149,7 +1150,11 @@ cubism_contextPrototype.horizon = function() {
         canvas.clearRect(i0, 0, width - i0, height);
 
         // record whether there are negative values to display
-        var negative;
+        var negative; 
+        var pattern = patterns[cubism.pixelWidth + ''];        
+        
+        if(pattern)
+            pattern = canvas.createPattern(pattern, 'repeat');
 
         // positive bands
         for (var j = 0; j < m; ++j) {
@@ -1163,7 +1168,15 @@ cubism_contextPrototype.horizon = function() {
           for (var i = parseInt(i0 / cubism.pixelWidth), n = width / cubism.pixelWidth | 0, y1; i < n; ++i) {
             y1 = metric_.valueAt(i);
             if (y1 <= 0) { negative = true; continue; }
-            if (y1 === undefined) continue;
+            if (y1 === undefined) {
+                if(pattern) {
+                  canvas.fillStyle = pattern;
+                  canvas.fillRect(i * cubism.pixelWidth, 0, cubism.pixelWidth, height);
+                  canvas.fillStyle = colors_[m + j];
+                }
+                
+                continue;
+            }
             canvas.fillRect(i * cubism.pixelWidth, y1 = scale(y1), cubism.pixelWidth, y0 - y1);
           }
         }
@@ -1297,6 +1310,12 @@ cubism_contextPrototype.horizon = function() {
     sel.select("canvas").attr("width", width);
     horizon.redraw();
     return width;
+  };
+  
+  horizon.patterns = function(_) {
+    if (!arguments.length) return patterns;
+    patterns = _;
+    return horizon;
   };
 
   return horizon;
