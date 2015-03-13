@@ -81,9 +81,8 @@ cubism_contextPrototype.horizon = function() {
         // clear for the new data
         canvas.clearRect(i0, 0, width - i0, height);
 
-        // record whether there are negative values to display
-        var negative; 
-        var pattern = patterns[cubism.pixelWidth + ''];        
+        var negative, f, y2;
+        var pattern = patterns[cubism.pixelWidth + ''];      
         
         if(pattern)
             pattern = canvas.createPattern(pattern, 'repeat');
@@ -97,8 +96,8 @@ cubism_contextPrototype.horizon = function() {
           scale.range([m * height + y0, y0]);
           y0 = scale(0);
 
-          for (var i = parseInt(i0 / cubism.pixelWidth), n = width / cubism.pixelWidth | 0, y1; i < n; ++i) {
-            y1 = metric_.valueAt(i);
+          for (var i = parseInt(i0 / cubism.pixelWidth), n = width / cubism.pixelWidth | 0, y1, x2 = metric_.valueAt(i - 1) || 0, x1; i < n; ++i, x2 = x1) {
+            x1 = y1 = metric_.valueAt(i);
             if (y1 <= 0) { negative = true; continue; }
             if (y1 === undefined) {
                 if(pattern) {
@@ -109,7 +108,18 @@ cubism_contextPrototype.horizon = function() {
                 
                 continue;
             }
-            canvas.fillRect(i * cubism.pixelWidth, y1 = scale(y1), cubism.pixelWidth, y0 - y1);
+            
+            y1 = scale(y1);
+            
+            if(cubism.pixelWidth > 1 && y1 > 0) {
+                f = (x1 - x2) / cubism.pixelWidth;
+                
+                for(var k = 1; k <= cubism.pixelWidth; ++k) {
+                    y2 = scale(x2 + f * k) ;
+                    canvas.fillRect(i * cubism.pixelWidth + k - 1, y2, 1, y0 - y2);
+                }
+            } else
+                canvas.fillRect(i * cubism.pixelWidth, y1, cubism.pixelWidth, y0 - y1);
           }
         }
 
@@ -129,11 +139,21 @@ cubism_contextPrototype.horizon = function() {
             scale.range([m * height + y0, y0]);
             y0 = scale(0);
 
-            for (var i = parseInt(i0 / cubism.pixelWidth), n = width / cubism.pixelWidth | 0, y1; i < n; ++i) {
-              y1 = metric_.valueAt(i);
+            for (var i = parseInt(i0 / cubism.pixelWidth), n = width / cubism.pixelWidth | 0, y1, x2 = metric_.valueAt(i - 1) || 0, x1; i < n; ++i, x2 = x1) {
+              x1 = y1 = metric_.valueAt(i);
               if (y1 >= 0) continue;
               if (y1 === undefined) continue;
-              canvas.fillRect(i * cubism.pixelWidth, scale(-y1), cubism.pixelWidth, y0 - scale(-y1));
+              y1 = scale(-y1);
+              
+              if(cubism.pixelWidth > 1 && y1 > 0) {
+                f = (x1 - x2) / cubism.pixelWidth;
+                
+                for(var k = 1; k <= cubism.pixelWidth; ++k) {
+                    y2 = scale(-1 * (x2 + f * k)) ;
+                    canvas.fillRect(i * cubism.pixelWidth + k - 1, y2, 1, y0 - y2);
+                }
+            } else
+                canvas.fillRect(i * cubism.pixelWidth, y1, cubism.pixelWidth, y0 - y1);
             }
           }
         }
