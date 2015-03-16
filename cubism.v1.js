@@ -1181,6 +1181,7 @@ cubism_contextPrototype.horizon = function() {
             y1 = scale(y1);
             
             if(cubism.pixelWidth > 1 && y1 > 0) {
+                x2 = i < 1 ? x1 : x2;
                 f = (x1 - x2) / cubism.pixelWidth;
                 
                 for(var k = 1; k <= cubism.pixelWidth; ++k) {
@@ -1215,6 +1216,7 @@ cubism_contextPrototype.horizon = function() {
               y1 = scale(-y1);
               
               if(cubism.pixelWidth > 1 && y1 > 0) {
+                x2 = i < 1 ? x1 : x2;
                 f = (x1 - x2) / cubism.pixelWidth;
                 
                 for(var k = 1; k <= cubism.pixelWidth; ++k) {
