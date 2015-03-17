@@ -29,6 +29,7 @@ cubism.context = function() {
 
     // If we're too late for the first prepare event, skip it.
     if (delay < clientDelay) delay += step;
+    if (delay < clientDelay) delay += step;
 
     timeout = setTimeout(function prepare() {
       stop1 = new Date(Math.floor((Date.now() - serverDelay + shift) / step) * step);
