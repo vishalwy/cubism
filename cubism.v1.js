@@ -1164,7 +1164,7 @@ cubism_contextPrototype.horizon = function() {
           scale.range([m * height + y0, y0]);
           y0 = scale(0);
 
-          for (var i = parseInt(i0 / cubism.pixelWidth), n = width / cubism.pixelWidth | 0, y1, x2 = metric_.valueAt(i - 1) || 0, x1; i < n; ++i, x2 = x1) {
+          for (var i = parseInt(i0 / cubism.pixelWidth), n = width / cubism.pixelWidth | 0, y1, x2 = metric_.valueAt(i - 1), x1; i < n; ++i, x2 = x1) {
             x1 = y1 = metric_.valueAt(i);
             if (y1 <= 0) { negative = true; continue; }
             if (y1 === undefined) {
@@ -1180,8 +1180,8 @@ cubism_contextPrototype.horizon = function() {
             y1 = scale(y1);
             
             if(cubism.pixelWidth > 1 && y1 > 0) {
-                x2 = i < 1 ? x1 : x2;
-                f = (x1 - x2) / cubism.pixelWidth;
+                x2 = (x2 === undefined ? x1 : x2) || 0;
+                f = ((x1 || 0) - x2) / cubism.pixelWidth;
                 
                 for(var k = 1; k <= cubism.pixelWidth; ++k) {
                     y2 = scale(x2 + f * k) ;
@@ -1208,15 +1208,15 @@ cubism_contextPrototype.horizon = function() {
             scale.range([m * height + y0, y0]);
             y0 = scale(0);
 
-            for (var i = parseInt(i0 / cubism.pixelWidth), n = width / cubism.pixelWidth | 0, y1, x2 = metric_.valueAt(i - 1) || 0, x1; i < n; ++i, x2 = x1) {
+            for (var i = parseInt(i0 / cubism.pixelWidth), n = width / cubism.pixelWidth | 0, y1, x2 = metric_.valueAt(i - 1), x1; i < n; ++i, x2 = x1) {
               x1 = y1 = metric_.valueAt(i);
               if (y1 >= 0) continue;
               if (y1 === undefined) continue;
               y1 = scale(-y1);
               
               if(cubism.pixelWidth > 1 && y1 > 0) {
-                x2 = i < 1 ? x1 : x2;
-                f = (x1 - x2) / cubism.pixelWidth;
+                x2 = (x2 === undefined ? x1 : x2) || 0;
+                f = ((x1 || 0) - x2) / cubism.pixelWidth;
                 
                 for(var k = 1; k <= cubism.pixelWidth; ++k) {
                     y2 = scale(-1 * (x2 + f * k)) ;
