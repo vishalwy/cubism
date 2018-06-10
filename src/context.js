@@ -1,40 +1,57 @@
-cubism.context = function() {
+cubism.context = function(options) {
   var context = new cubism_context,
-      step = 1e4, // ten seconds, in milliseconds
-      size = 1440, // four hours at ten seconds, in pixels
+      step = options && options.step ? options.step : 1e4, // ten seconds, in milliseconds
+      size = options && options.size ? options.size : 1440, // four hours at ten seconds, in pixels
       shift = 0, // no shift by default
       start0, stop0, // the start and stop for the previous change event
       start1, stop1, // the start and stop for the next prepare event
-      serverDelay = 5e3,
-      clientDelay = 5e3,
+      serverDelay = options && options.serverDelay ? options.serverDelay : 5e3,
+      clientDelay = options && options.clientDelay ? options.clientDelay : 5e3,
       event = d3.dispatch("prepare", "beforechange", "change", "focus"),
       scale = context.scale = d3.time.scale().range([0, size]),
       timeout,
+      clientTimeout,
       focusAnchor = null,
-      focus;
+      focus,
+      drawAsync = options && typeof options.drawAsync !== 'undefined' ? options.drawAsync : true,
+      requestCounter = 0,
+      pixelWidth = options && options.pixelWidth ? options.pixelWidth : 1,
+      isFetchFailing = false;
+      
+      
 
   function update() {
     var now = Date.now();
     stop0 = stop1 = new Date(Math.floor((now - serverDelay - clientDelay + shift) / step) * step);
-    start0 = start1 = new Date(stop0 - (size / cubism.pixelWidth | 0) * step);
+    start0 = start1 = new Date(stop0 - (size / pixelWidth | 0) * step);
     scale.domain([start0, stop0]);
     return context;
   }
 
   context.start = function() {
     if (timeout) clearTimeout(timeout);
+    if (clientTimeout) clearTimeout(clientTimeout);
     var delay = +stop1 + serverDelay - Date.now() - shift;
 
     // If we're too late for the first prepare event, skip it.
-    if (delay < clientDelay) delay += step;
-    if (delay < clientDelay) delay += step;
-
+    if (delay <= clientDelay) delay = (+stop1 + step - Date.now()) + serverDelay;
+    
     timeout = setTimeout(function prepare() {
       stop1 = new Date(Math.floor((Date.now() - serverDelay + shift) / step) * step);
-      start1 = new Date(stop1 - (size / cubism.pixelWidth | 0) * step);
+      start1 = new Date(stop1 - (size / context.pixelWidth() | 0) * step);
       event.prepare.call(context, start1, stop1);
 
-      setTimeout(function() {
+      clientTimeout = setTimeout(function emitChange() {
+        if(!drawAsync) {
+            if(isFetchFailing)
+            return;  
+          
+            if(requestCounter) {
+                clientTimeout = setTimeout(emitChange, clientDelay);
+                return;
+            }
+        }
+            
         scale.domain([start0 = start1, stop0 = stop1]);
         event.beforechange.call(context, start1, stop1);
         event.change.call(context, start1, stop1);
@@ -48,6 +65,7 @@ cubism.context = function() {
 
   context.stop = function() {
     timeout = clearTimeout(timeout);
+    clientTimeout = clearTimeout(clientTimeout);
     return context;
   };
 
@@ -100,6 +118,33 @@ cubism.context = function() {
     clientDelay = +_;
     return update();
   };
+  
+  context.drawAsync = function(_) {
+      if (!arguments.length) return drawAsync;
+      drawAsync = _;
+      return context;
+  };
+  
+  
+  
+  context.requestCounter = function(_) {
+    if (!arguments.length) return requestCounter;
+    requestCounter = +_;
+    requestCounter = Math.max(0, requestCounter);
+    return context;
+  };
+  
+  context.isFetchFailing =  function(_) {
+    if (!arguments.length) return isFetchFailing;
+    isFetchFailing = _;
+    return context;
+  };
+  
+  context.pixelWidth = function(_) {
+    if(!arguments.length) return pixelWidth;
+    pixelWidth = +_;
+    return context;
+  };
 
   // Sets the focus to the specified index, and dispatches a "focus" event.
   context.focus = function(i) {
@@ -134,11 +179,11 @@ cubism.context = function() {
     switch (!d3.event.metaKey && d3.event.keyCode) {
       case 37: // left
         if (focus == null) focus = size - 1;
-        if (focus > 0) context.focus(focus -= cubism.pixelWidth);
+        if (focus > 0) context.focus(focus -= pixelWidth);
         break;
       case 39: // right
         if (focus == null) focus = size - 2;
-        if (focus < size - 1) context.focus(focus += cubism.pixelWidth);
+        if (focus < size - 1) context.focus(focus += pixelWidth);
         break;
       default: return;
     }

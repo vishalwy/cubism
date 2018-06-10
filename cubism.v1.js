@@ -1,5 +1,5 @@
 (function(exports){
-var cubism = exports.cubism = {version: "1.6.0", pixelWidth: 1};
+var cubism = exports.cubism = {version: "1.6.0"};
 var cubism_id = 0;
 function cubism_identity(d) { return d; }
 cubism.option = function(name, defaultValue) {
@@ -20,43 +20,60 @@ cubism.options = function(name, defaultValues) {
   }
   return values.length || arguments.length < 2 ? values : defaultValues;
 };
-cubism.context = function() {
+cubism.context = function(options) {
   var context = new cubism_context,
-      step = 1e4, // ten seconds, in milliseconds
-      size = 1440, // four hours at ten seconds, in pixels
+      step = options && options.step ? options.step : 1e4, // ten seconds, in milliseconds
+      size = options && options.size ? options.size : 1440, // four hours at ten seconds, in pixels
       shift = 0, // no shift by default
       start0, stop0, // the start and stop for the previous change event
       start1, stop1, // the start and stop for the next prepare event
-      serverDelay = 5e3,
-      clientDelay = 5e3,
+      serverDelay = options && options.serverDelay ? options.serverDelay : 5e3,
+      clientDelay = options && options.clientDelay ? options.clientDelay : 5e3,
       event = d3.dispatch("prepare", "beforechange", "change", "focus"),
       scale = context.scale = d3.time.scale().range([0, size]),
       timeout,
+      clientTimeout,
       focusAnchor = null,
-      focus;
+      focus,
+      drawAsync = options && typeof options.drawAsync !== 'undefined' ? options.drawAsync : true,
+      requestCounter = 0,
+      pixelWidth = options && options.pixelWidth ? options.pixelWidth : 1,
+      isFetchFailing = false;
+      
+      
 
   function update() {
     var now = Date.now();
     stop0 = stop1 = new Date(Math.floor((now - serverDelay - clientDelay + shift) / step) * step);
-    start0 = start1 = new Date(stop0 - (size / cubism.pixelWidth | 0) * step);
+    start0 = start1 = new Date(stop0 - (size / pixelWidth | 0) * step);
     scale.domain([start0, stop0]);
     return context;
   }
 
   context.start = function() {
     if (timeout) clearTimeout(timeout);
+    if (clientTimeout) clearTimeout(clientTimeout);
     var delay = +stop1 + serverDelay - Date.now() - shift;
 
     // If we're too late for the first prepare event, skip it.
-    if (delay < clientDelay) delay += step;
-    if (delay < clientDelay) delay += step;
-
+    if (delay <= clientDelay) delay = (+stop1 + step - Date.now()) + serverDelay;
+    
     timeout = setTimeout(function prepare() {
       stop1 = new Date(Math.floor((Date.now() - serverDelay + shift) / step) * step);
-      start1 = new Date(stop1 - (size / cubism.pixelWidth | 0) * step);
+      start1 = new Date(stop1 - (size / context.pixelWidth() | 0) * step);
       event.prepare.call(context, start1, stop1);
 
-      setTimeout(function() {
+      clientTimeout = setTimeout(function emitChange() {
+        if(!drawAsync) {
+            if(isFetchFailing)
+            return;  
+          
+            if(requestCounter) {
+                clientTimeout = setTimeout(emitChange, clientDelay);
+                return;
+            }
+        }
+            
         scale.domain([start0 = start1, stop0 = stop1]);
         event.beforechange.call(context, start1, stop1);
         event.change.call(context, start1, stop1);
@@ -70,6 +87,7 @@ cubism.context = function() {
 
   context.stop = function() {
     timeout = clearTimeout(timeout);
+    clientTimeout = clearTimeout(clientTimeout);
     return context;
   };
 
@@ -122,6 +140,33 @@ cubism.context = function() {
     clientDelay = +_;
     return update();
   };
+  
+  context.drawAsync = function(_) {
+      if (!arguments.length) return drawAsync;
+      drawAsync = _;
+      return context;
+  };
+  
+  
+  
+  context.requestCounter = function(_) {
+    if (!arguments.length) return requestCounter;
+    requestCounter = +_;
+    requestCounter = Math.max(0, requestCounter);
+    return context;
+  };
+  
+  context.isFetchFailing =  function(_) {
+    if (!arguments.length) return isFetchFailing;
+    isFetchFailing = _;
+    return context;
+  };
+  
+  context.pixelWidth = function(_) {
+    if(!arguments.length) return pixelWidth;
+    pixelWidth = +_;
+    return context;
+  };
 
   // Sets the focus to the specified index, and dispatches a "focus" event.
   context.focus = function(i) {
@@ -156,11 +201,11 @@ cubism.context = function() {
     switch (!d3.event.metaKey && d3.event.keyCode) {
       case 37: // left
         if (focus == null) focus = size - 1;
-        if (focus > 0) context.focus(focus -= cubism.pixelWidth);
+        if (focus > 0) context.focus(focus -= pixelWidth);
         break;
       case 39: // right
         if (focus == null) focus = size - 2;
-        if (focus < size - 1) context.focus(focus += cubism.pixelWidth);
+        if (focus < size - 1) context.focus(focus += pixelWidth);
         break;
       default: return;
     }
@@ -917,7 +962,7 @@ cubism_contextPrototype.metric = function(request, name) {
       start = -Infinity,
       stop,
       step = context.step(),
-      size = parseInt(context.size()/cubism.pixelWidth),
+      size = parseInt(context.size()/context.pixelWidth()),
       values = [],
       event = d3.dispatch("change"),
       listening = 0,
@@ -925,14 +970,23 @@ cubism_contextPrototype.metric = function(request, name) {
 
   // Prefetch new data into a temporary array.
   function prepare(start1, stop) {
+    var curStart = start;
     var steps = Math.min(size, Math.round((start1 - start) / step));
     if (!steps || fetching) return; // already fetched, or fetching!
     fetching = true;
     steps = Math.min(size, steps + cubism_metricOverlap);
     var start0 = new Date(stop - steps * step);
+    context.requestCounter(1);
     request(start0, stop, step, function(error, data) {
+      context.requestCounter(-1);
       fetching = false;
-      if (error) return console.warn(error);
+      if (error) {
+          context.isFetchFailing(true);
+          start = isFinite(curStart) ? start : curStart;
+          return console.warn(error);
+      }
+      
+      context.isFetchFailing(false);    
       var i = isFinite(start) ? Math.round((start0 - start) / step) : 0;
       for (var j = 0, m = data.length; j < m; ++j) values[j + i] = data[j];
       event.change.call(metric, start, stop);
@@ -1118,9 +1172,10 @@ cubism_contextPrototype.horizon = function() {
 
       function change(start1, stop) {
         canvas.save();
-
+        
         // compute the new extent and ready flag
         var extent = metric_.extent();
+        var pixelWidth = context.pixelWidth();
         ready = extent.every(isFinite);
         var tempExtent = null;
         if (extent_ != null) tempExtent = typeof extent_ === "function" ? extent_.call(that, d, i) : extent_;
@@ -1130,8 +1185,8 @@ cubism_contextPrototype.horizon = function() {
         var i0 = 0, max = Math.max(-extent[0], extent[1]);
         if (this === context) {
           if (max == max_) {
-            var dx = parseInt(((start1 - start) / step) * cubism.pixelWidth);
-            i0 = width - Math.max(dx, cubism_metricOverlap * cubism.pixelWidth);
+            var dx = parseInt(((start1 - start) / step) * pixelWidth);
+            i0 = width - Math.max(dx, cubism_metricOverlap * pixelWidth);
             if (dx < width) {
               var canvas0 = buffer.getContext("2d");
               canvas0.clearRect(0, 0, width, height);
@@ -1148,92 +1203,91 @@ cubism_contextPrototype.horizon = function() {
 
         // clear for the new data
         canvas.clearRect(i0, 0, width - i0, height);
-
-        var negative, f, y2;
-        var pattern = patterns[cubism.pixelWidth + ''];      
+        
+        var negative = false, f, y2;
+        var pattern = patterns[pixelWidth + ''] || patterns['1'];      
         
         if(pattern)
             pattern = canvas.createPattern(pattern, 'repeat');
-
+        
         // positive bands
         for (var j = 0; j < m; ++j) {
           canvas.fillStyle = colors_[m + j];
-
+        
           // Adjust the range based on the current band index.
           var y0 = (j - m + 1) * height;
           scale.range([m * height + y0, y0]);
           y0 = scale(0);
 
-          for (var i = parseInt(i0 / cubism.pixelWidth), n = width / cubism.pixelWidth | 0, y1, x2 = metric_.valueAt(i - 1), x1; i < n; ++i, x2 = x1) {
+          for (var i = parseInt(i0 / pixelWidth), n = width / pixelWidth | 0, y1, x2 = metric_.valueAt(i - 1), x1; i < n; ++i, x2 = x1) {
             x1 = y1 = metric_.valueAt(i);
-            if (y1 <= 0) { negative = true; continue; }
-            if (y1 === undefined) {
+            
+            if (isNaN(y1)) {
                 if(pattern) {
                   canvas.fillStyle = pattern;
-                  canvas.fillRect(i * cubism.pixelWidth, 0, cubism.pixelWidth, height);
-                  canvas.fillStyle = colors_[m + j];
+                  canvas.fillRect(i * pixelWidth, 0, pixelWidth, height);
                 }
                 
                 continue;
             }
             
-            y1 = scale(y1);
+            if(pixelWidth > 1) {
+                x2 = (isNaN(x2) ? x1 : x2) || 0;
+                f = ((x1 || 0) - x2) / pixelWidth;
+                
+                for(var k = 1; k <= pixelWidth; ++k) {
+                    y2 = x2 + f * k;
+                    if(y2 < 0) {
+                        if (!negative) {
+                            canvas.translate(0, height);
+                            canvas.scale(1, -1);
+                            negative = true;
+                        }
+                        canvas.fillStyle = colors_[m - 1 - j];
+                        y2 = scale(-y2);
+                    } else {
+                        if(negative) {
+                            canvas.translate(0, height);
+                            canvas.scale(1, -1);
+                            negative = false;
+                        }
+                        
+                        canvas.fillStyle = colors_[m + j];
+                        y2 = scale(y2);
+                    }
+                    canvas.fillRect(i * pixelWidth + k - 1, y2, 1, y0 - y2);
+                }
+            } else {
+                if (y1 < 0) {
+                    if(!negative) {
+                        canvas.translate(0, height);
+                        canvas.scale(1, -1);
+                        negative = true;
+                    }
+                    canvas.fillStyle = colors_[m - 1 - j];
+                    y1 = scale(-y1);
+                } else {
+                    if(negative) {
+                        canvas.translate(0, -1 * height);
+                        canvas.scale(1, 1);
+                        negative = false;
+                    }
+
+                    canvas.fillStyle = colors_[m + j];
+                    y1 = scale(y1);
+                }
             
-            if(cubism.pixelWidth > 1 && y1 > 0) {
-                x2 = (x2 === undefined ? x1 : x2) || 0;
-                f = ((x1 || 0) - x2) / cubism.pixelWidth;
-                
-                for(var k = 1; k <= cubism.pixelWidth; ++k) {
-                    y2 = scale(x2 + f * k) ;
-                    canvas.fillRect(i * cubism.pixelWidth + k - 1, y2, 1, y0 - y2);
-                }
-            } else
-                canvas.fillRect(i * cubism.pixelWidth, y1, cubism.pixelWidth, y0 - y1);
-          }
-        }
-
-        if (negative) {
-          // enable offset mode
-          if (mode === "offset") {
-            canvas.translate(0, height);
-            canvas.scale(1, -1);
-          }
-
-          // negative bands
-          for (var j = 0; j < m; ++j) {
-            canvas.fillStyle = colors_[m - 1 - j];
-
-            // Adjust the range based on the current band index.
-            var y0 = (j - m + 1) * height;
-            scale.range([m * height + y0, y0]);
-            y0 = scale(0);
-
-            for (var i = parseInt(i0 / cubism.pixelWidth), n = width / cubism.pixelWidth | 0, y1, x2 = metric_.valueAt(i - 1), x1; i < n; ++i, x2 = x1) {
-              x1 = y1 = metric_.valueAt(i);
-              if (y1 >= 0) continue;
-              if (y1 === undefined) continue;
-              y1 = scale(-y1);
-              
-              if(cubism.pixelWidth > 1 && y1 > 0) {
-                x2 = (x2 === undefined ? x1 : x2) || 0;
-                f = ((x1 || 0) - x2) / cubism.pixelWidth;
-                
-                for(var k = 1; k <= cubism.pixelWidth; ++k) {
-                    y2 = scale(-1 * (x2 + f * k)) ;
-                    canvas.fillRect(i * cubism.pixelWidth + k - 1, y2, 1, y0 - y2);
-                }
-            } else
-                canvas.fillRect(i * cubism.pixelWidth, y1, cubism.pixelWidth, y0 - y1);
+                canvas.fillRect(i * pixelWidth, y1, pixelWidth, y0 - y1);
             }
           }
         }
-
+        
         canvas.restore();
       }
 
       function focus(i) {
         if (i == null) i = width - 1;
-        var value = metric_.valueAt(i / cubism.pixelWidth | 0);
+        var value = metric_.valueAt(i / context.pixelWidth() | 0);
         span.datum(value).text(isNaN(value) ? formatNaN : format);
       }
 
@@ -1579,170 +1633,174 @@ function cubism_comparisonRoundOdd(i) {
   return ((i + 1) & 0xfffffe) - 1;
 }
 cubism_contextPrototype.axis = function() {
-  var context = this,
-      width = context.size(),
-      scale = context.scale,
-      axis_ = d3.svg.axis().scale(scale);
-
-  var formatDefault = context.step() < 6e4 ? cubism_axisFormatSeconds
-      : context.step() < 864e5 ? cubism_axisFormatMinutes
-      : cubism_axisFormatDays;
-  var format = formatDefault;
-
-  function axis(selection) {
-    var id = ++cubism_id,
-        tick;
-
-    var g = selection.append("svg")
-        .datum({id: id})
-        .attr("width", width)
-        .attr("height", Math.max(28, -axis.tickSize()))
-      .append("g")
-        .attr("transform", "translate(0," + (axis_.orient() === "top" ? 27 : 4) + ")")
-        .call(axis_);
-
-    context.on("change.axis-" + id, function() {
-      g.call(axis_);
-      if (!tick) tick = d3.select(g.node().appendChild(g.selectAll("text").node().cloneNode(true)))
-          .style("display", "none")
-          .text(null);
-    });
-
-    context.on("focus.axis-" + id, function(i) {
-      if (tick) {
-        if (i == null) {
-            tick.style("display", "none");
-            g.selectAll("text").style("fill-opacity", null);
-        } else {
-            i = (i / cubism.pixelWidth | 0) * cubism.pixelWidth;
-            tick.style("display", null).text(format(scale.invert(i)));
-            var dx = tick.node().getComputedTextLength() + 6;
-            var dxt = (dx - 6) / 2;
-
-            if (i + dxt > width) 
-                i = width - dxt;
-            else if (i - dxt < 0)
-                i = dxt;
-
-            tick.attr('x', i);
-            g.selectAll("text").style("opacity", function(d) { return Math.abs(scale(d) - i) < dx ? 0 : 1; });
+    var context = this,
+        width = context.size(),
+        scale = context.scale,
+        axis_ = d3.svg.axis().scale(scale);
+  
+    var formatDefault = context.step() < 6e4 ? cubism_axisFormatSeconds
+        : context.step() < 864e5 ? cubism_axisFormatMinutes
+        : cubism_axisFormatDays;
+    var format = formatDefault;
+  
+    function axis(selection) {
+      var id = ++cubism_id,
+          tick;
+  
+      var g = selection.append("svg")
+          .datum({id: id})
+          .attr("width", width)
+          .attr("height", Math.max(28, -axis.tickSize()))
+        .append("g")
+          .attr("transform", "translate(0," + (axis_.orient() === "top" ? 27 : 4) + ")")
+          .call(axis_);
+  
+      context.on("change.axis-" + id, function() {
+        g.call(axis_);
+        if (!tick) tick = d3.select(g.node().appendChild(g.selectAll("text").node().cloneNode(true)))
+            .style("display", "none")
+            .text(null);
+      });
+  
+      context.on("focus.axis-" + id, function(i) {
+        var pixelWidth = context.pixelWidth();
+        if (tick) {
+          if (i == null) {
+              tick.style("display", "none");
+              g.selectAll("text").style("fill-opacity", null);
+          } else {
+              
+              i = (i / pixelWidth | 0) * pixelWidth;
+              tick.style("display", null).text(format(scale.invert(i)));
+              var dx = tick.node().getComputedTextLength() + 6;
+              var dxt = (dx - 6) / 2;
+  
+              if (i + dxt > width) 
+                  i = width - dxt;
+              else if (i - dxt < 0)
+                  i = dxt;
+  
+              tick.attr('x', i);
+              g.selectAll("text").style("opacity", function(d) { return Math.abs(scale(d) - i) < dx ? 0 : 1; });
+          }
         }
-      }
-    });
-  }
-
-  axis.remove = function(selection) {
-
-    selection.selectAll("svg")
-        .each(remove)
-        .remove();
-
-    function remove(d) {
-      context.on("change.axis-" + d.id, null);
-      context.on("focus.axis-" + d.id, null);
+      });
     }
-  };
-
-  axis.width = function(_) {
-    if (!arguments.length) return width;
-    width = +_;
-    scale = context.scale.range([0, width]);
-    axis_ = axis_.scale(scale);
+  
+    axis.remove = function(selection) {
+  
+      selection.selectAll("svg")
+          .each(remove)
+          .remove();
+  
+      function remove(d) {
+        context.on("change.axis-" + d.id, null);
+        context.on("focus.axis-" + d.id, null);
+      }
+    };
+  
+    axis.width = function(_) {
+      if (!arguments.length) return width;
+      width = +_;
+      scale = context.scale.range([0, width]);
+      axis_ = axis_.scale(scale);
+    };
+    
+    axis.focusFormat = function(_) {
+      if (!arguments.length) return format == formatDefault ? null : _;
+      format = _ == null ? formatDefault : _;
+      return axis;
+    };
+  
+    return d3.rebind(axis, axis_,
+        "orient",
+        "ticks",
+        "tickSubdivide",
+        "tickSize",
+        "tickPadding",
+        "tickFormat");
   };
   
-  axis.focusFormat = function(_) {
-    if (!arguments.length) return format == formatDefault ? null : _;
-    format = _ == null ? formatDefault : _;
-    return axis;
-  };
-
-  return d3.rebind(axis, axis_,
-      "orient",
-      "ticks",
-      "tickSubdivide",
-      "tickSize",
-      "tickPadding",
-      "tickFormat");
-};
-
-var cubism_axisFormatSeconds = d3.time.format("%I:%M:%S %p"),
-    cubism_axisFormatMinutes = d3.time.format("%I:%M %p"),
-    cubism_axisFormatDays = d3.time.format("%B %d");
+  var cubism_axisFormatSeconds = d3.time.format("%I:%M:%S %p"),
+      cubism_axisFormatMinutes = d3.time.format("%I:%M %p"),
+      cubism_axisFormatDays = d3.time.format("%B %d");
 cubism_contextPrototype.rule = function() {
   var context = this,
       metric = cubism_identity;
-
-  function rule(selection) {
-    var id = ++cubism_id;
-
-    var line = selection.append("div")
-        .datum({id: id})
-        .attr("class", "line")
-        .call(cubism_ruleStyle);
-
-    selection.each(function(d, i) {
-      var that = this,
-          id = ++cubism_id,
-          metric_ = typeof metric === "function" ? metric.call(that, d, i) : metric;
-
-      if (!metric_) return;
-
-      function change(start, stop) {
-        var values = [];
-
-        for (var i = 0, n = context.size(); i < n; ++i) {
-          if (metric_.valueAt(i)) {
-            values.push(i);
-          }
-        }
-
-        var lines = selection.selectAll(".metric").data(values);
-        lines.exit().remove();
-        lines.enter().append("div").attr("class", "metric line").call(cubism_ruleStyle);
-        lines.style("left", cubism_ruleLeft);
-      }
-
-      context.on("change.rule-" + id, change);
-      metric_.on("change.rule-" + id, change);
-    });
-
-    context.on("focus.rule-" + id, function(i) {
+        
+    function cubism_ruleStyle(line) {
+      var pixelWidth = context.pixelWidth();
       line
-          .style("display", i == null ? "none" : null)
-          .style("left", i == null ? null : i + 'px');
-    });
-  }
-
-  rule.remove = function(selection) {
-
-    selection.selectAll(".line")
-        .each(remove)
-        .remove();
-
-    function remove(d) {
-      context.on("focus.rule-" + d.id, null);
+          .style("position", "absolute")
+          .style("top", 0)
+          .style("bottom", 0)
+          .style("width", pixelWidth + "px")
+          .style("pointer-events", "none");
     }
-  };
-
-  rule.metric = function(_) {
-    if (!arguments.length) return metric;
-    metric = _;
+  
+    function cubism_ruleLeft(i) {
+      var pixelWidth = context.pixelWidth();  
+      return (i / pixelWidth | 0) * pixelWidth + "px";
+    }
+  
+    function rule(selection) {
+      var id = ++cubism_id;
+  
+      var line = selection.append("div")
+          .datum({id: id})
+          .attr("class", "line")
+          .call(cubism_ruleStyle);
+  
+      selection.each(function(d, i) {
+        var that = this,
+            id = ++cubism_id,
+            metric_ = typeof metric === "function" ? metric.call(that, d, i) : metric;
+  
+        if (!metric_) return;
+  
+        function change(start, stop) {
+          var values = [];
+  
+          for (var i = 0, n = context.size(); i < n; ++i) {
+            if (metric_.valueAt(i)) {
+              values.push(i);
+            }
+          }
+  
+          var lines = selection.selectAll(".metric").data(values);
+          lines.exit().remove();
+          lines.enter().append("div").attr("class", "metric line").call(cubism_ruleStyle);
+          lines.style("left", cubism_ruleLeft);
+        }
+  
+        context.on("change.rule-" + id, change);
+        metric_.on("change.rule-" + id, change);
+      });
+  
+      context.on("focus.rule-" + id, function(i) {
+        line
+            .style("display", i == null ? "none" : null)
+            .style("left", i == null ? null : i + 'px');
+      });
+    }
+  
+    rule.remove = function(selection) {
+  
+      selection.selectAll(".line")
+          .each(remove)
+          .remove();
+  
+      function remove(d) {
+        context.on("focus.rule-" + d.id, null);
+      }
+    };
+  
+    rule.metric = function(_) {
+      if (!arguments.length) return metric;
+      metric = _;
+      return rule;
+    };
+  
     return rule;
   };
-
-  return rule;
-};
-
-function cubism_ruleStyle(line) {
-  line
-      .style("position", "absolute")
-      .style("top", 0)
-      .style("bottom", 0)
-      .style("width", cubism.pixelWidth + "px")
-      .style("pointer-events", "none");
-}
-
-function cubism_ruleLeft(i) {
-  return (i / cubism.pixelWidth | 0) * cubism.pixelWidth + "px";
-}
-})(this);
+  })(this);

@@ -50,9 +50,10 @@ cubism_contextPrototype.horizon = function() {
 
       function change(start1, stop) {
         canvas.save();
-
+        
         // compute the new extent and ready flag
         var extent = metric_.extent();
+        var pixelWidth = context.pixelWidth();
         ready = extent.every(isFinite);
         var tempExtent = null;
         if (extent_ != null) tempExtent = typeof extent_ === "function" ? extent_.call(that, d, i) : extent_;
@@ -62,8 +63,8 @@ cubism_contextPrototype.horizon = function() {
         var i0 = 0, max = Math.max(-extent[0], extent[1]);
         if (this === context) {
           if (max == max_) {
-            var dx = parseInt(((start1 - start) / step) * cubism.pixelWidth);
-            i0 = width - Math.max(dx, cubism_metricOverlap * cubism.pixelWidth);
+            var dx = parseInt(((start1 - start) / step) * pixelWidth);
+            i0 = width - Math.max(dx, cubism_metricOverlap * pixelWidth);
             if (dx < width) {
               var canvas0 = buffer.getContext("2d");
               canvas0.clearRect(0, 0, width, height);
@@ -80,92 +81,91 @@ cubism_contextPrototype.horizon = function() {
 
         // clear for the new data
         canvas.clearRect(i0, 0, width - i0, height);
-
-        var negative, f, y2;
-        var pattern = patterns[cubism.pixelWidth + ''];      
+        
+        var negative = false, f, y2;
+        var pattern = patterns[pixelWidth + ''] || patterns['1'];      
         
         if(pattern)
             pattern = canvas.createPattern(pattern, 'repeat');
-
+        
         // positive bands
         for (var j = 0; j < m; ++j) {
           canvas.fillStyle = colors_[m + j];
-
+        
           // Adjust the range based on the current band index.
           var y0 = (j - m + 1) * height;
           scale.range([m * height + y0, y0]);
           y0 = scale(0);
 
-          for (var i = parseInt(i0 / cubism.pixelWidth), n = width / cubism.pixelWidth | 0, y1, x2 = metric_.valueAt(i - 1), x1; i < n; ++i, x2 = x1) {
+          for (var i = parseInt(i0 / pixelWidth), n = width / pixelWidth | 0, y1, x2 = metric_.valueAt(i - 1), x1; i < n; ++i, x2 = x1) {
             x1 = y1 = metric_.valueAt(i);
-            if (y1 <= 0) { negative = true; continue; }
-            if (y1 === undefined) {
+            
+            if (isNaN(y1)) {
                 if(pattern) {
                   canvas.fillStyle = pattern;
-                  canvas.fillRect(i * cubism.pixelWidth, 0, cubism.pixelWidth, height);
-                  canvas.fillStyle = colors_[m + j];
+                  canvas.fillRect(i * pixelWidth, 0, pixelWidth, height);
                 }
                 
                 continue;
             }
             
-            y1 = scale(y1);
+            if(pixelWidth > 1) {
+                x2 = (isNaN(x2) ? x1 : x2) || 0;
+                f = ((x1 || 0) - x2) / pixelWidth;
+                
+                for(var k = 1; k <= pixelWidth; ++k) {
+                    y2 = x2 + f * k;
+                    if(y2 < 0) {
+                        if (!negative) {
+                            canvas.translate(0, height);
+                            canvas.scale(1, -1);
+                            negative = true;
+                        }
+                        canvas.fillStyle = colors_[m - 1 - j];
+                        y2 = scale(-y2);
+                    } else {
+                        if(negative) {
+                            canvas.translate(0, height);
+                            canvas.scale(1, -1);
+                            negative = false;
+                        }
+                        
+                        canvas.fillStyle = colors_[m + j];
+                        y2 = scale(y2);
+                    }
+                    canvas.fillRect(i * pixelWidth + k - 1, y2, 1, y0 - y2);
+                }
+            } else {
+                if (y1 < 0) {
+                    if(!negative) {
+                        canvas.translate(0, height);
+                        canvas.scale(1, -1);
+                        negative = true;
+                    }
+                    canvas.fillStyle = colors_[m - 1 - j];
+                    y1 = scale(-y1);
+                } else {
+                    if(negative) {
+                        canvas.translate(0, -1 * height);
+                        canvas.scale(1, 1);
+                        negative = false;
+                    }
+
+                    canvas.fillStyle = colors_[m + j];
+                    y1 = scale(y1);
+                }
             
-            if(cubism.pixelWidth > 1 && y1 > 0) {
-                x2 = (x2 === undefined ? x1 : x2) || 0;
-                f = ((x1 || 0) - x2) / cubism.pixelWidth;
-                
-                for(var k = 1; k <= cubism.pixelWidth; ++k) {
-                    y2 = scale(x2 + f * k) ;
-                    canvas.fillRect(i * cubism.pixelWidth + k - 1, y2, 1, y0 - y2);
-                }
-            } else
-                canvas.fillRect(i * cubism.pixelWidth, y1, cubism.pixelWidth, y0 - y1);
-          }
-        }
-
-        if (negative) {
-          // enable offset mode
-          if (mode === "offset") {
-            canvas.translate(0, height);
-            canvas.scale(1, -1);
-          }
-
-          // negative bands
-          for (var j = 0; j < m; ++j) {
-            canvas.fillStyle = colors_[m - 1 - j];
-
-            // Adjust the range based on the current band index.
-            var y0 = (j - m + 1) * height;
-            scale.range([m * height + y0, y0]);
-            y0 = scale(0);
-
-            for (var i = parseInt(i0 / cubism.pixelWidth), n = width / cubism.pixelWidth | 0, y1, x2 = metric_.valueAt(i - 1), x1; i < n; ++i, x2 = x1) {
-              x1 = y1 = metric_.valueAt(i);
-              if (y1 >= 0) continue;
-              if (y1 === undefined) continue;
-              y1 = scale(-y1);
-              
-              if(cubism.pixelWidth > 1 && y1 > 0) {
-                x2 = (x2 === undefined ? x1 : x2) || 0;
-                f = ((x1 || 0) - x2) / cubism.pixelWidth;
-                
-                for(var k = 1; k <= cubism.pixelWidth; ++k) {
-                    y2 = scale(-1 * (x2 + f * k)) ;
-                    canvas.fillRect(i * cubism.pixelWidth + k - 1, y2, 1, y0 - y2);
-                }
-            } else
-                canvas.fillRect(i * cubism.pixelWidth, y1, cubism.pixelWidth, y0 - y1);
+                canvas.fillRect(i * pixelWidth, y1, pixelWidth, y0 - y1);
             }
           }
         }
-
+        
         canvas.restore();
       }
 
       function focus(i) {
         if (i == null) i = width - 1;
-        var value = metric_.valueAt(i / cubism.pixelWidth | 0);
+        var value = metric_.valueAt(i / context.pixelWidth() | 0);
         span.datum(value).text(isNaN(value) ? formatNaN : format);
       }
 

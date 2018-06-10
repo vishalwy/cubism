@@ -49,7 +49,7 @@ cubism_contextPrototype.metric = function(request, name) {
       start = -Infinity,
       stop,
       step = context.step(),
-      size = parseInt(context.size()/cubism.pixelWidth),
+      size = parseInt(context.size()/context.pixelWidth()),
       values = [],
       event = d3.dispatch("change"),
       listening = 0,
@@ -57,14 +57,23 @@ cubism_contextPrototype.metric = function(request, name) {
 
   // Prefetch new data into a temporary array.
   function prepare(start1, stop) {
+    var curStart = start;
     var steps = Math.min(size, Math.round((start1 - start) / step));
     if (!steps || fetching) return; // already fetched, or fetching!
     fetching = true;
     steps = Math.min(size, steps + cubism_metricOverlap);
     var start0 = new Date(stop - steps * step);
+    context.requestCounter(1);
     request(start0, stop, step, function(error, data) {
+      context.requestCounter(-1);
       fetching = false;
-      if (error) return console.warn(error);
+      if (error) {
+          context.isFetchFailing(true);
+          start = isFinite(curStart) ? start : curStart;
+          return console.warn(error);
+      }
+      
+      context.isFetchFailing(false);    
       var i = isFinite(start) ? Math.round((start0 - start) / step) : 0;
       for (var j = 0, m = data.length; j < m; ++j) values[j + i] = data[j];
       event.change.call(metric, start, stop);
